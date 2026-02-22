@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Property } from "@shared/schema";
+import type { Property, Inquiry } from "@shared/schema";
 
 function slugify(text: string): string {
   return text
@@ -564,6 +564,7 @@ export default function Admin() {
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [deletingProperty, setDeletingProperty] = useState<Property | null>(null);
+  const [activeTab, setActiveTab] = useState<"properties" | "leads">("properties");
 
   const sessionQuery = useQuery<{ isAdmin: boolean }>({
     queryKey: ["/api/admin/session"],
@@ -588,6 +589,16 @@ export default function Admin() {
       return res.json();
     },
     enabled: isLoggedIn,
+  });
+
+  const inquiriesQuery = useQuery<Inquiry[]>({
+    queryKey: ["/api/admin/inquiries"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/inquiries", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch inquiries");
+      return res.json();
+    },
+    enabled: isLoggedIn && activeTab === "leads",
   });
 
   const deleteMutation = useMutation({
@@ -634,12 +645,27 @@ export default function Admin() {
   }
 
   const properties = propertiesQuery.data || [];
+  const inquiries = inquiriesQuery.data || [];
 
   return (
     <div className="min-h-screen bg-background">
       <div className="bg-gray-900 text-white">
         <div className="container mx-auto px-6 md:px-12 py-4 flex items-center justify-between">
           <h1 className="text-xl font-serif" data-testid="text-admin-title">Admin Dashboard</h1>
+          <div className="flex gap-6">
+            <button 
+              onClick={() => setActiveTab("properties")}
+              className={`text-sm uppercase tracking-widest transition-colors ${activeTab === "properties" ? "text-white border-b border-primary" : "text-white/60 hover:text-white"}`}
+            >
+              Properties
+            </button>
+            <button 
+              onClick={() => setActiveTab("leads")}
+              className={`text-sm uppercase tracking-widest transition-colors ${activeTab === "leads" ? "text-white border-b border-primary" : "text-white/60 hover:text-white"}`}
+            >
+              Leads
+            </button>
+          </div>
           <button
             onClick={handleLogout}
             className="text-white/70 hover:text-white text-sm uppercase tracking-widest transition-colors"
@@ -651,72 +677,112 @@ export default function Admin() {
       </div>
 
       <div className="container mx-auto px-6 md:px-12 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-lg font-serif" data-testid="text-properties-heading">Properties ({properties.length})</h2>
-          <button
-            onClick={() => {
-              setEditingProperty(null);
-              setShowEditor(true);
-            }}
-            className="bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium uppercase tracking-widest hover:bg-primary/90 transition-colors"
-            data-testid="button-add-property"
-          >
-            Add New Property
-          </button>
-        </div>
-
-        {propertiesQuery.isLoading ? (
-          <div className="text-muted-foreground animate-pulse">Loading properties...</div>
-        ) : properties.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground" data-testid="text-no-properties">
-            <p className="text-lg mb-2">No properties yet</p>
-            <p className="text-sm">Click "Add New Property" to get started.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {properties.map((prop) => (
-              <div
-                key={prop.id}
-                className="flex items-center gap-4 border border-border p-4 hover:bg-secondary/20 transition-colors"
-                data-testid={`card-property-${prop.id}`}
+        {activeTab === "properties" ? (
+          <>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-lg font-serif" data-testid="text-properties-heading">Properties ({properties.length})</h2>
+              <button
+                onClick={() => {
+                  setEditingProperty(null);
+                  setShowEditor(true);
+                }}
+                className="bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium uppercase tracking-widest hover:bg-primary/90 transition-colors"
+                data-testid="button-add-property"
               >
-                {prop.imageUrl && (
-                  <img src={prop.imageUrl} alt={prop.title} className="w-16 h-16 object-cover flex-shrink-0 border border-border" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-serif text-base truncate" data-testid={`text-property-title-${prop.id}`}>{prop.title}</h3>
-                    {prop.featured && (
-                      <span className="bg-primary text-primary-foreground text-[10px] px-2 py-0.5 font-bold uppercase tracking-wider flex-shrink-0" data-testid={`badge-featured-${prop.id}`}>
-                        Featured
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate" data-testid={`text-property-address-${prop.id}`}>{prop.address}</p>
-                  <p className="text-sm text-primary font-medium" data-testid={`text-property-price-${prop.id}`}>{formatPrice(String(prop.price))}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      setEditingProperty(prop);
-                      setShowEditor(true);
-                    }}
-                    className="border border-border px-3 py-1.5 text-xs font-medium uppercase tracking-wider hover:bg-secondary/50 transition-colors"
-                    data-testid={`button-edit-property-${prop.id}`}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => setDeletingProperty(prop)}
-                    className="border border-red-300 text-red-600 px-3 py-1.5 text-xs font-medium uppercase tracking-wider hover:bg-red-50 transition-colors"
-                    data-testid={`button-delete-property-${prop.id}`}
-                  >
-                    Delete
-                  </button>
-                </div>
+                Add New Property
+              </button>
+            </div>
+
+            {propertiesQuery.isLoading ? (
+              <div className="text-muted-foreground animate-pulse">Loading properties...</div>
+            ) : properties.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground" data-testid="text-no-properties">
+                <p className="text-lg mb-2">No properties yet</p>
+                <p className="text-sm">Click "Add New Property" to get started.</p>
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="space-y-2">
+                {properties.map((prop) => (
+                  <div
+                    key={prop.id}
+                    className="flex items-center gap-4 border border-border p-4 hover:bg-secondary/20 transition-colors"
+                    data-testid={`card-property-${prop.id}`}
+                  >
+                    {prop.imageUrl && (
+                      <img src={prop.imageUrl} alt={prop.title} className="w-16 h-16 object-cover flex-shrink-0 border border-border" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-serif text-base truncate" data-testid={`text-property-title-${prop.id}`}>{prop.title}</h3>
+                        {prop.featured && (
+                          <span className="bg-primary text-primary-foreground text-[10px] px-2 py-0.5 font-bold uppercase tracking-wider flex-shrink-0" data-testid={`badge-featured-${prop.id}`}>
+                            Featured
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate" data-testid={`text-property-address-${prop.id}`}>{prop.address}</p>
+                      <p className="text-sm text-primary font-medium" data-testid={`text-property-price-${prop.id}`}>{formatPrice(String(prop.price))}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          setEditingProperty(prop);
+                          setShowEditor(true);
+                        }}
+                        className="border border-border px-3 py-1.5 text-xs font-medium uppercase tracking-wider hover:bg-secondary/50 transition-colors"
+                        data-testid={`button-edit-property-${prop.id}`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeletingProperty(prop)}
+                        className="border border-red-300 text-red-600 px-3 py-1.5 text-xs font-medium uppercase tracking-wider hover:bg-red-50 transition-colors"
+                        data-testid={`button-delete-property-${prop.id}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-lg font-serif">Inbound Leads ({inquiries.length})</h2>
+            </div>
+
+            {inquiriesQuery.isLoading ? (
+              <div className="text-muted-foreground animate-pulse">Loading leads...</div>
+            ) : inquiries.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <p className="text-lg mb-2">No leads yet</p>
+                <p className="text-sm">New messages from the contact form will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {inquiries.map((inquiry) => (
+                  <div key={inquiry.id} className="border border-border p-6 bg-card">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="font-serif text-lg">{inquiry.firstName} {inquiry.lastName}</h3>
+                        <p className="text-sm text-primary">{inquiry.email}</p>
+                      </div>
+                      <span className="text-xs text-muted-foreground uppercase tracking-widest">
+                        {new Date(inquiry.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="bg-secondary/20 p-4 border-l-2 border-primary">
+                      <p className="text-sm italic text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                        "{inquiry.message}"
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -79,6 +79,11 @@ export async function registerRoutes(
     return res.json({ isAdmin: !!req.session?.isAdmin });
   });
 
+  app.get("/api/admin/inquiries", requireAdmin, async (_req, res) => {
+    const inquiries = await storage.getInquiries();
+    return res.json(inquiries);
+  });
+
   app.get("/api/admin/properties", requireAdmin, async (_req, res) => {
     const props = await storage.getProperties();
     return res.json(props);
